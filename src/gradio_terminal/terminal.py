@@ -114,7 +114,7 @@ class TerminalServer:
                 if app.config["fd"]:
                     timeout_sec = 0
                     try:
-                        (data_ready, _, _) = select.select([app.config["fd"]], [], [], timeout_sec)
+                        data_ready, _, _ = select.select([app.config["fd"]], [], [], timeout_sec)
                         if data_ready:
                             output = os.read(app.config["fd"], max_read_bytes).decode(
                                 errors="ignore"
@@ -142,7 +142,7 @@ class TerminalServer:
             if app.config["child_pid"]:
                 return
 
-            (child_pid, fd) = pty.fork()
+            child_pid, fd = pty.fork()
             if child_pid == 0:
                 subprocess.run(app.config["cmd"])
             else:
@@ -493,13 +493,11 @@ def create_terminal_demo(
 
         Terminal(port=port, host=host, command=command, height=height)
 
-        gr.Markdown(
-            f"""
+        gr.Markdown(f"""
             **Tips:**
             - If using SSH tunneling, also tunnel port {port}:
               `ssh -L 7860:localhost:7860 -L {port}:localhost:{port} user@remote`
-            """
-        )
+            """)
 
     return demo
 

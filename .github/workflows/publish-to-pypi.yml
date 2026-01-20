@@ -9,19 +9,16 @@ on:
 
 jobs:
   format:
-    name: Format code with Black
+    name: Format Check
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v6
       - name: Run Black
-        uses: psf/black@stable
+        uses: psf/black@26.1.0
         with:
           src: "."
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: Apply Black formatting
+          options: "--check --diff"
 
   build:
     name: Build distribution

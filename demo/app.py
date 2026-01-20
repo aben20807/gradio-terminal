@@ -28,8 +28,7 @@ def build_demo():
     - Alongside other Gradio components
     """
     with gr.Blocks(title="Gradio Terminal Demo") as demo:
-        gr.Markdown(
-            f"""
+        gr.Markdown(f"""
             # Gradio Terminal Demo
 
             This demo shows how to use the `Terminal` component within a Gradio Blocks app.
@@ -39,13 +38,11 @@ def build_demo():
             ```
             ssh -L {GRADIO_PORT}:localhost:{GRADIO_PORT} -L {TERMINAL_PORT}:localhost:{TERMINAL_PORT} user@remote
             ```
-            """
-        )
+            """)
 
         with gr.Row():
             with gr.Column(scale=1):
-                gr.Markdown(
-                    """
+                gr.Markdown("""
                     ## About This Component
 
                     The `Terminal` component embeds a fully interactive terminal
@@ -67,8 +64,7 @@ def build_demo():
 
                     demo.launch()
                     ```
-                    """
-                )
+                    """)
 
             with gr.Column(scale=2):
                 gr.Markdown("### Interactive Terminal")
@@ -80,14 +76,12 @@ def build_demo():
                     height=400,
                 )
 
-        gr.Markdown(
-            f"""
+        gr.Markdown(f"""
             ---
             **Tips:**
             - Try running `htop`, `vim`, or any other terminal application!
             - Terminal server is running on port **{TERMINAL_PORT}**
-            """
-        )
+            """)
 
     return demo
 
