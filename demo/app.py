@@ -74,6 +74,8 @@ def build_demo():
                     host="0.0.0.0",  # Allow connections from any host
                     command="bash",
                     height=400,
+                    allow_sudo=False,
+                    blacklist_commands=["passwd", "su"],
                 )
 
         gr.Markdown(f"""
@@ -81,6 +83,7 @@ def build_demo():
             **Tips:**
             - Try running `htop`, `vim`, or any other terminal application!
             - Terminal server is running on port **{TERMINAL_PORT}**
+            - Secure version: Disable `sudo` and blacklist sensitive commands, e.g., `passwd`, `su`.
             """)
 
     return demo

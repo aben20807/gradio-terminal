@@ -82,6 +82,7 @@ class TerminalServer:
         self.host = host
         self.command = command
         self.allow_sudo = True
+        self.blacklist_commands = []
         self._running = False
         self._thread = None
         self._app = None
@@ -102,6 +103,7 @@ class TerminalServer:
         app.config["cmd"] = shlex.split(self.command)
         app.config["input_buffer"] = ""
         app.config["allow_sudo"] = self.allow_sudo
+        app.config["blacklist_commands"] = self.blacklist_commands
 
         socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -147,6 +149,18 @@ class TerminalServer:
                         app.config["input_buffer"] = ""
                         os.write(app.config["fd"], b"\x03")  # Send Ctrl+C to cancel
                         return
+
+                    # Check for blacklisted commands
+                    words = line.split()
+                    for cmd in app.config["blacklist_commands"]:
+                        if cmd in words:
+                            error_msg = (
+                                f"\r\n\033[31mError: '{cmd}' command is not allowed.\033[0m\r\n"
+                            )
+                            socketio.emit("pty-output", {"output": error_msg}, namespace="/pty")
+                            app.config["input_buffer"] = ""
+                            os.write(app.config["fd"], b"\x03")  # Send Ctrl+C to cancel
+                            return
 
                     # Reset buffer for next command
                     app.config["input_buffer"] = ""
@@ -405,6 +419,7 @@ class Terminal:
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
         allow_sudo: bool = True,
+        blacklist_commands: list[str] | None = None,
     ):
         """
         Create a Terminal component.
@@ -419,6 +434,7 @@ class Terminal:
             elem_id: HTML element ID.
             elem_classes: CSS classes.
             allow_sudo: Whether to allow sudo commands (default: True).
+            blacklist_commands: List of commands to block (default: None).
         """
         self.port = port
         self.host = host
@@ -429,10 +445,12 @@ class Terminal:
         self.elem_id = elem_id
         self.elem_classes = elem_classes
         self.allow_sudo = allow_sudo
+        self.blacklist_commands = blacklist_commands or []
 
         # Start the terminal server
         self._server = TerminalServer(port=port, host=host, command=command)
         self._server.allow_sudo = allow_sudo
+        self._server.blacklist_commands = self.blacklist_commands
         terminal_url = self._server.start()
 
         # Build the HTML with iframe
@@ -473,6 +491,7 @@ def create_terminal(
     height: int = 400,
     label: str | None = None,
     allow_sudo: bool = True,
+    blacklist_commands: list[str] | None = None,
 ) -> Terminal:
     """
     Create a terminal component that can be used in Gradio Blocks.
@@ -484,6 +503,7 @@ def create_terminal(
         height: Height of the terminal in pixels.
         label: Optional label for the terminal.
         allow_sudo: Whether to allow sudo commands (default: True).
+        blacklist_commands: List of commands to block (default: None).
 
     Returns:
         A Terminal instance.
@@ -495,6 +515,7 @@ def create_terminal(
         height=height,
         label=label,
         allow_sudo=allow_sudo,
+        blacklist_commands=blacklist_commands,
     )
 
 
@@ -504,6 +525,7 @@ def create_terminal_demo(
     command: str = "bash",
     height: int = 400,
     allow_sudo: bool = True,
+    blacklist_commands: list[str] | None = None,
 ) -> gr.Blocks:
     """
     Create a Gradio Blocks demo with an embedded terminal.
@@ -514,6 +536,7 @@ def create_terminal_demo(
         command: Shell command to run.
         height: Height of the terminal in pixels.
         allow_sudo: Whether to allow sudo commands (default: True).
+        blacklist_commands: List of commands to block (default: None).
 
     Returns:
         A Gradio Blocks instance with the terminal.
@@ -522,7 +545,14 @@ def create_terminal_demo(
         gr.Markdown("## Interactive Terminal")
         gr.Markdown(f"Terminal server running on port {port}")
 
-        Terminal(port=port, host=host, command=command, height=height, allow_sudo=allow_sudo)
+        Terminal(
+            port=port,
+            host=host,
+            command=command,
+            height=height,
+            allow_sudo=allow_sudo,
+            blacklist_commands=blacklist_commands,
+        )
 
         gr.Markdown(f"""
             **Tips:**
@@ -539,6 +569,7 @@ def launch_terminal(
     command: str = "bash",
     share: bool = False,
     allow_sudo: bool = True,
+    blacklist_commands: list[str] | None = None,
     **launch_kwargs,
 ):
     """
@@ -550,7 +581,14 @@ def launch_terminal(
         command: Shell command to run (default: bash).
         share: Whether to create a public link.
         allow_sudo: Whether to allow sudo commands (default: True).
+        blacklist_commands: List of commands to block (default: None).
         **launch_kwargs: Additional arguments passed to demo.launch()
     """
-    demo = create_terminal_demo(port=port, host=host, command=command, allow_sudo=allow_sudo)
+    demo = create_terminal_demo(
+        port=port,
+        host=host,
+        command=command,
+        allow_sudo=allow_sudo,
+        blacklist_commands=blacklist_commands,
+    )
     demo.launch(share=share, **launch_kwargs)
