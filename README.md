@@ -36,13 +36,27 @@ with demo:
 demo.launch()
 ```
 
+### Terminal with Blacklist
+
+```python
+import gradio as gr
+from gradio_terminal import Terminal
+demo = gr.Blocks()
+with demo:
+    terminal = Terminal(
+        allow_sudo=False,
+        blacklist_commands=["rm", "shutdown", "reboot"]  # Block dangerous commands
+    )
+demo.launch()
+```
+
 ## API Reference
 
 | Function | Parameters | Description |
 |----------|------------|-------------|
-| `launch_terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `share=False`, `allow_sudo=True`, `**launch_kwargs` | Launch a standalone Gradio app with a terminal. |
-| `create_terminal_demo()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `allow_sudo=True` | Create a Gradio Blocks demo with an embedded terminal. |
-| `Terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `label=None`, `visible=True`, `elem_id=None`, `elem_classes=None`, `allow_sudo=True` | Create a terminal component for Gradio Blocks. |
+| `launch_terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `share=False`, `allow_sudo=True`, `blacklist_commands=None`, `**launch_kwargs` | Launch a standalone Gradio app with a terminal. |
+| `create_terminal_demo()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `allow_sudo=True`, `blacklist_commands=None` | Create a Gradio Blocks demo with an embedded terminal. |
+| `Terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `label=None`, `visible=True`, `elem_id=None`, `elem_classes=None`, `allow_sudo=True`, `blacklist_commands=None` | Create a terminal component for Gradio Blocks. |
 | `TerminalServer()` | `port=5000`, `host="127.0.0.1"`, `command="bash"` | Low-level terminal server for custom integrations. |
 
 ### TerminalServer Methods
@@ -56,13 +70,17 @@ demo.launch()
 ### Notes
 
 - `allow_sudo`: Whether to allow sudo commands (default: True). When False, sudo commands are blocked with an error message.
+- `blacklist_commands`: List of commands to block (default: None). Any command in this list will be blocked with an error message.
 
 ## Security
 
-This component provides shell access to your server. Use the `allow_sudo=False` parameter to block sudo commands for enhanced security:
+This component provides shell access to your server. Use the `allow_sudo=False` parameter to block sudo commands and the `blacklist_commands` parameter to block specific dangerous commands for enhanced security:
 
 ```python
-terminal = Terminal(allow_sudo=False)
+terminal = Terminal(
+    allow_sudo=False,
+    blacklist_commands=["rm", "shutdown", "reboot", "passwd"]
+)
 ```
 
 ## Requirements
