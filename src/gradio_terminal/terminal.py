@@ -50,7 +50,6 @@ import subprocess
 import termios
 import threading
 import time
-from typing import Any
 
 import gradio as gr
 
@@ -82,6 +81,7 @@ class TerminalServer:
         self.port = port
         self.host = host
         self.command = command
+        self.allow_sudo = True
         self._running = False
         self._thread = None
         self._app = None
@@ -100,6 +100,8 @@ class TerminalServer:
         app.config["fd"] = None
         app.config["child_pid"] = None
         app.config["cmd"] = shlex.split(self.command)
+        app.config["input_buffer"] = ""
+        app.config["allow_sudo"] = self.allow_sudo
 
         socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -130,6 +132,26 @@ class TerminalServer:
         @socketio.on("pty-input", namespace="/pty")
         def pty_input(data):
             if app.config["fd"]:
+                app.config["input_buffer"] += data["input"]
+
+                # Check for command completion (Enter pressed)
+                if "\r" in data["input"] or "\n" in data["input"]:
+                    line = app.config["input_buffer"].strip()
+
+                    # Check if sudo is used and not allowed
+                    if "sudo" in line.split() and not app.config["allow_sudo"]:
+                        # Deny the sudo command
+                        error_msg = "\r\n\033[31mError: sudo commands are not allowed.\033[0m\r\n"
+                        socketio.emit("pty-output", {"output": error_msg}, namespace="/pty")
+                        # Clear the buffer and send newline to get a fresh prompt
+                        app.config["input_buffer"] = ""
+                        os.write(app.config["fd"], b"\x03")  # Send Ctrl+C to cancel
+                        return
+
+                    # Reset buffer for next command
+                    app.config["input_buffer"] = ""
+
+                # Write input to PTY
                 os.write(app.config["fd"], data["input"].encode())
 
         @socketio.on("resize", namespace="/pty")
@@ -382,6 +404,7 @@ class Terminal:
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
+        allow_sudo: bool = True,
     ):
         """
         Create a Terminal component.
@@ -395,6 +418,7 @@ class Terminal:
             visible: Whether the terminal is visible.
             elem_id: HTML element ID.
             elem_classes: CSS classes.
+            allow_sudo: Whether to allow sudo commands (default: True).
         """
         self.port = port
         self.host = host
@@ -404,9 +428,11 @@ class Terminal:
         self.visible = visible
         self.elem_id = elem_id
         self.elem_classes = elem_classes
+        self.allow_sudo = allow_sudo
 
         # Start the terminal server
         self._server = TerminalServer(port=port, host=host, command=command)
+        self._server.allow_sudo = allow_sudo
         terminal_url = self._server.start()
 
         # Build the HTML with iframe
@@ -446,6 +472,7 @@ def create_terminal(
     command: str = "bash",
     height: int = 400,
     label: str | None = None,
+    allow_sudo: bool = True,
 ) -> Terminal:
     """
     Create a terminal component that can be used in Gradio Blocks.
@@ -456,6 +483,7 @@ def create_terminal(
         command: Shell command to run (default: bash).
         height: Height of the terminal in pixels.
         label: Optional label for the terminal.
+        allow_sudo: Whether to allow sudo commands (default: True).
 
     Returns:
         A Terminal instance.
@@ -466,6 +494,7 @@ def create_terminal(
         command=command,
         height=height,
         label=label,
+        allow_sudo=allow_sudo,
     )
 
 
@@ -474,6 +503,7 @@ def create_terminal_demo(
     host: str = "127.0.0.1",
     command: str = "bash",
     height: int = 400,
+    allow_sudo: bool = True,
 ) -> gr.Blocks:
     """
     Create a Gradio Blocks demo with an embedded terminal.
@@ -483,6 +513,7 @@ def create_terminal_demo(
         host: Host for the terminal server.
         command: Shell command to run.
         height: Height of the terminal in pixels.
+        allow_sudo: Whether to allow sudo commands (default: True).
 
     Returns:
         A Gradio Blocks instance with the terminal.
@@ -491,7 +522,7 @@ def create_terminal_demo(
         gr.Markdown("## Interactive Terminal")
         gr.Markdown(f"Terminal server running on port {port}")
 
-        Terminal(port=port, host=host, command=command, height=height)
+        Terminal(port=port, host=host, command=command, height=height, allow_sudo=allow_sudo)
 
         gr.Markdown(f"""
             **Tips:**
@@ -507,6 +538,7 @@ def launch_terminal(
     host: str = "127.0.0.1",
     command: str = "bash",
     share: bool = False,
+    allow_sudo: bool = True,
     **launch_kwargs,
 ):
     """
@@ -517,7 +549,8 @@ def launch_terminal(
         host: Host for the terminal server.
         command: Shell command to run (default: bash).
         share: Whether to create a public link.
+        allow_sudo: Whether to allow sudo commands (default: True).
         **launch_kwargs: Additional arguments passed to demo.launch()
     """
-    demo = create_terminal_demo(port=port, host=host, command=command)
+    demo = create_terminal_demo(port=port, host=host, command=command, allow_sudo=allow_sudo)
     demo.launch(share=share, **launch_kwargs)

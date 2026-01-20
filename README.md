@@ -25,23 +25,45 @@ with demo:
 demo.launch()
 ```
 
+### Secure Terminal (No Sudo)
+
+```python
+import gradio as gr
+from gradio_terminal import Terminal
+demo = gr.Blocks()
+with demo:
+    terminal = Terminal(allow_sudo=False)  # Block sudo commands
+demo.launch()
+```
+
 ## API Reference
 
-`launch_terminal(port=5000, host="127.0.0.1", command="bash", share=False, **launch_kwargs)`
+| Function | Parameters | Description |
+|----------|------------|-------------|
+| `launch_terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `share=False`, `allow_sudo=True`, `**launch_kwargs` | Launch a standalone Gradio app with a terminal. |
+| `create_terminal_demo()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `allow_sudo=True` | Create a Gradio Blocks demo with an embedded terminal. |
+| `Terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `label=None`, `visible=True`, `elem_id=None`, `elem_classes=None`, `allow_sudo=True` | Create a terminal component for Gradio Blocks. |
+| `TerminalServer()` | `port=5000`, `host="127.0.0.1"`, `command="bash"` | Low-level terminal server for custom integrations. |
 
-Launch a standalone Gradio app with a terminal.
+### TerminalServer Methods
 
-`create_terminal_demo(port=5000, host="127.0.0.1", command="bash", height=400)`
+| Method | Description |
+|--------|-------------|
+| `start()` | Start the server and return the URL |
+| `get_url()` | Get the terminal server URL |
+| `stop()` | Stop the terminal server |
 
-Create a Gradio Blocks demo with an embedded terminal.
+### Notes
 
-`TerminalServer(port=5000, host="127.0.0.1", command="bash")`
+- `allow_sudo`: Whether to allow sudo commands (default: True). When False, sudo commands are blocked with an error message.
 
-Low-level terminal server for custom integrations.
+## Security
 
-- `start()`: Start the server and return the URL
-- `get_url()`: Get the terminal server URL
-- `stop()`: Stop the terminal server
+This component provides shell access to your server. Use the `allow_sudo=False` parameter to block sudo commands for enhanced security:
+
+```python
+terminal = Terminal(allow_sudo=False)
+```
 
 ## Requirements
 
