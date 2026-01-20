@@ -1,5 +1,7 @@
 # Gradio Terminal
 
+[![PyPI](https://img.shields.io/pypi/v/gradio-terminal?color=blue&style=flat&logo=pypi)](https://pypi.org/project/gradio-terminal/) [![PyPI Downloads](https://static.pepy.tech/badge/gradio-terminal)](https://pepy.tech/projects/gradio-terminal) [![GitHub license](https://img.shields.io/github/license/aben20807/gradio-terminal?color=blue)](LICENSE) [![Coding style](https://img.shields.io/badge/code%20style-black-1183C3.svg)](https://github.com/psf/black)
+
 A Gradio component that provides a fully functional terminal in your browser. This package uses xterm.js on the frontend and a PTY on the backend to provide a real shell experience.
 
 ![Gradio Terminal](https://github.com/user-attachments/assets/8a4cc81a-07a4-4c56-a008-bd438eae50de)
