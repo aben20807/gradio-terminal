@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="gradio-terminal",
-    version="1.0.0",
+    version="1.1.0",
     author="Po-Hsuan Huang",
     author_email="aben20807@gmail.com",
     description="A Gradio component that provides a fully functional terminal using xterm.js and PTY",

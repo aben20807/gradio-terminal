@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gradio-terminal"
-version = "1.0.0"
+version = "1.1.0"
 description = "A Gradio component that provides a fully functional terminal using xterm.js and PTY"
 readme = "README.md"
 license = {text = "Apache-2.0"}

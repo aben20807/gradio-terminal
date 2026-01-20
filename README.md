@@ -28,26 +28,17 @@ demo.launch()
 ### Secure Terminal (No Sudo)
 
 ```python
-import gradio as gr
-from gradio_terminal import Terminal
-demo = gr.Blocks()
 with demo:
     terminal = Terminal(allow_sudo=False)  # Block sudo commands
-demo.launch()
 ```
 
 ### Terminal with Blacklist
 
 ```python
-import gradio as gr
-from gradio_terminal import Terminal
-demo = gr.Blocks()
 with demo:
     terminal = Terminal(
-        allow_sudo=False,
         blacklist_commands=["rm", "shutdown", "reboot"]  # Block dangerous commands
     )
-demo.launch()
 ```
 
 ## API Reference
@@ -83,15 +74,9 @@ terminal = Terminal(
 )
 ```
 
-## Requirements
+## Disclaimer and Security Notice
 
-- Python 3.8+
-- Linux
-- Dependencies: gradio, flask, flask-socketio
-
-## Security Notice
-
-This component provides shell access to your server. Use only in trusted environments.
+This component provides shell access to your server, which can pose significant security risks if misused. It should only be used in trusted environments. While this package provides settings such as `allow_sudo=False` and `blacklist_commands` to reduce potential threats, it does not guarantee complete security. The authors are not responsible for any misuse or damage caused by this component.
 
 ## License
 
