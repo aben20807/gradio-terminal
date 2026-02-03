@@ -93,17 +93,15 @@ class TerminalServer:
 
     def _create_app(self):
         """Create and configure the Flask app with SocketIO."""
-        from flask import Flask, render_template_string
+        from flask import Flask, render_template_string, request
         from flask_socketio import SocketIO
 
         app = Flask(__name__)
         app.config["SECRET_KEY"] = "gradio-terminal-secret"
-        app.config["fd"] = None
-        app.config["child_pid"] = None
         app.config["cmd"] = shlex.split(self.command)
-        app.config["input_buffer"] = ""
         app.config["allow_sudo"] = self.allow_sudo
         app.config["blacklist_commands"] = self.blacklist_commands
+        app.config["sessions"] = {}
 
         socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -111,21 +109,23 @@ class TerminalServer:
             winsize = struct.pack("HHHH", row, col, xpix, ypix)
             fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
-        def read_and_forward_pty_output():
+        def read_and_forward_pty_output(fd, sid):
             max_read_bytes = 1024 * 20
             while True:
                 socketio.sleep(0.01)
-                if app.config["fd"]:
-                    timeout_sec = 0
-                    try:
-                        data_ready, _, _ = select.select([app.config["fd"]], [], [], timeout_sec)
-                        if data_ready:
-                            output = os.read(app.config["fd"], max_read_bytes).decode(
-                                errors="ignore"
-                            )
-                            socketio.emit("pty-output", {"output": output}, namespace="/pty")
-                    except (OSError, ValueError):
-                        break
+                timeout_sec = 0
+                try:
+                    data_ready, _, _ = select.select([fd], [], [], timeout_sec)
+                    if data_ready:
+                        output = os.read(fd, max_read_bytes).decode(errors="ignore")
+                        socketio.emit(
+                            "pty-output",
+                            {"output": output},
+                            namespace="/pty",
+                            to=sid,
+                        )
+                except (OSError, ValueError):
+                    break
 
         @app.route("/")
         def index():
@@ -133,21 +133,28 @@ class TerminalServer:
 
         @socketio.on("pty-input", namespace="/pty")
         def pty_input(data):
-            if app.config["fd"]:
-                app.config["input_buffer"] += data["input"]
+            sid = request.sid
+            session = app.config["sessions"].get(sid)
+            if session and session["fd"]:
+                session["input_buffer"] += data["input"]
 
                 # Check for command completion (Enter pressed)
                 if "\r" in data["input"] or "\n" in data["input"]:
-                    line = app.config["input_buffer"].strip()
+                    line = session["input_buffer"].strip()
 
                     # Check if sudo is used and not allowed
                     if "sudo" in line.split() and not app.config["allow_sudo"]:
                         # Deny the sudo command
                         error_msg = "\r\n\033[31mError: sudo commands are not allowed.\033[0m\r\n"
-                        socketio.emit("pty-output", {"output": error_msg}, namespace="/pty")
+                        socketio.emit(
+                            "pty-output",
+                            {"output": error_msg},
+                            namespace="/pty",
+                            to=sid,
+                        )
                         # Clear the buffer and send newline to get a fresh prompt
-                        app.config["input_buffer"] = ""
-                        os.write(app.config["fd"], b"\x03")  # Send Ctrl+C to cancel
+                        session["input_buffer"] = ""
+                        os.write(session["fd"], b"\x03")  # Send Ctrl+C to cancel
                         return
 
                     # Check for blacklisted commands
@@ -157,39 +164,65 @@ class TerminalServer:
                             error_msg = (
                                 f"\r\n\033[31mError: '{cmd}' command is not allowed.\033[0m\r\n"
                             )
-                            socketio.emit("pty-output", {"output": error_msg}, namespace="/pty")
-                            app.config["input_buffer"] = ""
-                            os.write(app.config["fd"], b"\x03")  # Send Ctrl+C to cancel
+                            socketio.emit(
+                                "pty-output",
+                                {"output": error_msg},
+                                namespace="/pty",
+                                to=sid,
+                            )
+                            session["input_buffer"] = ""
+                            os.write(session["fd"], b"\x03")  # Send Ctrl+C to cancel
                             return
 
                     # Reset buffer for next command
-                    app.config["input_buffer"] = ""
+                    session["input_buffer"] = ""
 
                 # Write input to PTY
-                os.write(app.config["fd"], data["input"].encode())
+                os.write(session["fd"], data["input"].encode())
 
         @socketio.on("resize", namespace="/pty")
         def resize(data):
-            if app.config["fd"]:
-                set_winsize(app.config["fd"], data["rows"], data["cols"])
+            sid = request.sid
+            session = app.config["sessions"].get(sid)
+            if session and session["fd"]:
+                set_winsize(session["fd"], data["rows"], data["cols"])
 
         @socketio.on("connect", namespace="/pty")
         def connect():
-            if app.config["child_pid"]:
+            sid = request.sid
+            if sid in app.config["sessions"]:
                 return
 
             child_pid, fd = pty.fork()
             if child_pid == 0:
                 subprocess.run(app.config["cmd"])
             else:
-                app.config["fd"] = fd
-                app.config["child_pid"] = child_pid
+                app.config["sessions"][sid] = {
+                    "fd": fd,
+                    "child_pid": child_pid,
+                    "input_buffer": "",
+                }
                 set_winsize(fd, 24, 80)
-                socketio.start_background_task(target=read_and_forward_pty_output)
+                socketio.start_background_task(target=read_and_forward_pty_output, fd=fd, sid=sid)
 
         @socketio.on("disconnect", namespace="/pty")
         def disconnect():
-            pass
+            sid = request.sid
+            session = app.config["sessions"].pop(sid, None)
+            if not session:
+                return
+            try:
+                if session.get("child_pid"):
+                    os.kill(session["child_pid"], signal.SIGTERM)
+                    time.sleep(0.05)
+                    os.kill(session["child_pid"], signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+            try:
+                if session.get("fd"):
+                    os.close(session["fd"])
+            except OSError:
+                pass
 
         return app, socketio
 
@@ -372,15 +405,22 @@ class TerminalServer:
 
     def stop(self):
         """Stop the terminal server."""
-        if self._app and self._app.config.get("child_pid"):
-            try:
-                os.kill(self._app.config["child_pid"], signal.SIGTERM)
-                time.sleep(0.1)
-                os.kill(self._app.config["child_pid"], signal.SIGKILL)
-            except (ProcessLookupError, OSError):
-                pass
-            self._app.config["child_pid"] = None
-            self._app.config["fd"] = None
+        if self._app and self._app.config.get("sessions"):
+            sessions = list(self._app.config["sessions"].values())
+            for session in sessions:
+                try:
+                    if session.get("child_pid"):
+                        os.kill(session["child_pid"], signal.SIGTERM)
+                        time.sleep(0.05)
+                        os.kill(session["child_pid"], signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    pass
+                try:
+                    if session.get("fd"):
+                        os.close(session["fd"])
+                except OSError:
+                    pass
+            self._app.config["sessions"].clear()
         self._running = False
 
         if self.port in _terminal_servers:
