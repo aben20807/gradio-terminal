@@ -77,10 +77,21 @@ class TerminalServer:
     Runs Flask-SocketIO in a background thread.
     """
 
-    def __init__(self, port: int = 5000, host: str = "127.0.0.1", command: str = "bash"):
+    def __init__(
+        self,
+        port: int = 5000,
+        host: str = "127.0.0.1",
+        command: str = "bash",
+        theme: str = "dark",
+        xterm_options: dict | None = None,
+        allow_unsafe_werkzeug: bool = False,
+    ):
         self.port = port
         self.host = host
         self.command = command
+        self.theme = theme
+        self.xterm_options = xterm_options or {}
+        self.allow_unsafe_werkzeug = allow_unsafe_werkzeug
         self.allow_sudo = True
         self.blacklist_commands = []
         self._running = False
@@ -226,52 +237,122 @@ class TerminalServer:
 
         return app, socketio
 
+    def _get_xterm_theme_json(self) -> str:
+        import json
+
+        if self.theme == "dark":
+            theme = {
+                "background": "#1E1E1E",
+                "foreground": "#D4D4D4",
+                "cursor": "#D4D4D4",
+                "cursorAccent": "#1E1E1E",
+                "selectionBackground": "rgba(255, 255, 255, 0.3)",
+                "black": "#2E3436",
+                "red": "#CC0000",
+                "green": "#4E9A06",
+                "yellow": "#C4A000",
+                "blue": "#3465A4",
+                "magenta": "#75507B",
+                "cyan": "#06989A",
+                "white": "#D3D7CF",
+                "brightBlack": "#555753",
+                "brightRed": "#EF2929",
+                "brightGreen": "#8AE234",
+                "brightYellow": "#FCE94F",
+                "brightBlue": "#729FCF",
+                "brightMagenta": "#AD7FA8",
+                "brightCyan": "#34E2E2",
+                "brightWhite": "#EEEEEC",
+            }
+        else:
+            theme = {
+                "background": "#EAECDD",
+                "foreground": "#40453E",
+                "cursor": "#00BBEC",
+                "cursorAccent": "#F7FEE7",
+                "selectionBackground": "#40504040",
+                "black": "#2F3126",
+                "red": "#FF8080",
+                "green": "#16a34a",
+                "yellow": "#b45309",
+                "blue": "#1E90FF",
+                "magenta": "#FF1493",
+                "cyan": "#047857",
+                "white": "#A7A697",
+                "brightBlack": "#5A5E57",
+                "brightRed": "#FF9999",
+                "brightGreen": "#22C55E",
+                "brightYellow": "#D97706",
+                "brightBlue": "#60A5FA",
+                "brightMagenta": "#F472B6",
+                "brightCyan": "#10B981",
+                "brightWhite": "#E0E1D4",
+            }
+
+        config = {
+            "theme": theme,
+        }
+
+        user_options = {k: v for k, v in self.xterm_options.items() if k not in ["theme"]}
+        config.update(user_options)
+
+        if "theme" in self.xterm_options and isinstance(self.xterm_options["theme"], dict):
+            config["theme"].update(self.xterm_options["theme"])
+
+        return json.dumps(config)
+
     def _get_terminal_html(self) -> str:
         """Return the HTML template for the terminal."""
-        return """
+        import json
+
+        full_config = json.loads(self._get_xterm_theme_json())
+        bg_color = full_config["theme"].get("background", "#1E1E1E")
+        js_config = json.dumps(full_config)
+
+        return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <title>Gradio Terminal</title>
     <style>
-        html, body {
+        html, body {{
             margin: 0;
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background-color: #1e1e1e;
-        }
-        #terminal {
+            background-color: {bg_color};
+        }}
+        #terminal {{
             width: 100%;
             height: 100%;
-        }
-        #status {
+        }}
+        #status {{
             position: absolute;
             top: 5px;
             right: 10px;
             font-size: 12px;
             font-family: Arial, sans-serif;
             z-index: 1000;
-        }
-        .connected {
+        }}
+        .connected {{
             background-color: #4CAF50;
             color: white;
             padding: 2px 8px;
             border-radius: 3px;
-        }
-        .disconnected {
+        }}
+        .disconnected {{
             background-color: #f44336;
             color: white;
             padding: 2px 8px;
             border-radius: 3px;
-        }
-        .connecting {
+        }}
+        .connecting {{
             background-color: #ff9800;
             color: white;
             padding: 2px 8px;
             border-radius: 3px;
-        }
+        }}
     </style>
     <link rel="stylesheet" href="https://unpkg.com/xterm@4.11.0/css/xterm.css" />
 </head>
@@ -285,20 +366,15 @@ class TerminalServer:
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
 
     <script>
-        const term = new Terminal({
+        const config = {js_config}
+        const term = new Terminal({{
+            fontSize: 14,
+            fontFamily: 'Consolas, Monaco, monospace',
             cursorBlink: true,
             macOptionIsMeta: true,
             scrollback: 5000,
-            fontSize: 14,
-            fontFamily: 'Consolas, Monaco, monospace',
-            theme: {
-                background: '#1e1e1e',
-                foreground: '#d4d4d4',
-                cursor: '#d4d4d4',
-                cursorAccent: '#1e1e1e',
-                selectionBackground: 'rgba(255, 255, 255, 0.3)',
-            }
-        });
+            ...config,
+            }});
 
         const fit = new FitAddon.FitAddon();
         term.loadAddon(fit);
@@ -307,70 +383,69 @@ class TerminalServer:
         term.open(document.getElementById("terminal"));
         fit.fit();
 
-        term.attachCustomKeyEventHandler((e) => {
+        term.attachCustomKeyEventHandler((e) => {{
             if (e.type !== "keydown") return true;
-            if (e.ctrlKey && e.shiftKey) {
+            if (e.ctrlKey && e.shiftKey) {{
                 const key = e.key.toLowerCase();
-                if (key === "v") {
-                    navigator.clipboard.readText().then((text) => {
+                if (key === "v") {{
+                    navigator.clipboard.readText().then((text) => {{
                         term.writeText(text);
-                    });
+                    }});
                     return false;
-                } else if (key === "c" || key === "x") {
+                }} else if (key === "c" || key === "x") {{
                     const selection = term.getSelection();
-                    if (selection) {
+                    if (selection) {{
                         navigator.clipboard.writeText(selection);
-                    }
+                    }}
                     return false;
-                }
-            }
+                }}
+            }}
             return true;
-        });
+        }});
 
         const socket = io.connect("/pty");
         const status = document.getElementById("status");
 
-        term.onData((data) => {
-            socket.emit("pty-input", { input: data });
-        });
+        term.onData((data) => {{
+            socket.emit("pty-input", {{ input: data }});
+        }});
 
-        socket.on("pty-output", (data) => {
+        socket.on("pty-output", (data) => {{
             term.write(data.output);
-        });
+        }});
 
-        socket.on("connect", () => {
+        socket.on("connect", () => {{
             status.innerHTML = '<span class="connected">connected</span>';
             fitToScreen();
-        });
+        }});
 
-        socket.on("disconnect", () => {
+        socket.on("disconnect", () => {{
             status.innerHTML = '<span class="disconnected">disconnected</span>';
-        });
+        }});
 
-        socket.on("connect_error", (error) => {
+        socket.on("connect_error", (error) => {{
             status.innerHTML = '<span class="disconnected">error</span>';
-        });
+        }});
 
-        function fitToScreen() {
+        function fitToScreen() {{
             fit.fit();
-            const dims = { cols: term.cols, rows: term.rows };
+            const dims = {{ cols: term.cols, rows: term.rows }};
             socket.emit("resize", dims);
-        }
+        }}
 
-        function debounce(func, wait) {
+        function debounce(func, wait) {{
             let timeout;
-            return function(...args) {
+            return function(...args) {{
                 clearTimeout(timeout);
                 timeout = setTimeout(() => func.apply(this, args), wait);
-            };
-        }
+            }};
+        }}
 
         window.onresize = debounce(fitToScreen, 50);
         setTimeout(fitToScreen, 100);
     </script>
 </body>
-</html>
-"""
+</html>"""
 
     def start(self):
         """Start the terminal server in a background thread."""
@@ -387,6 +462,7 @@ class TerminalServer:
                 debug=False,
                 use_reloader=False,
                 log_output=False,
+                allow_unsafe_werkzeug=self.allow_unsafe_werkzeug,
             )
 
         self._thread = threading.Thread(target=run_server, daemon=True)
@@ -460,6 +536,9 @@ class Terminal:
         elem_classes: list[str] | str | None = None,
         allow_sudo: bool = True,
         blacklist_commands: list[str] | None = None,
+        theme: str = "dark",
+        xterm_options: dict | None = None,
+        allow_unsafe_werkzeug: bool = False,
     ):
         """
         Create a Terminal component.
@@ -475,6 +554,9 @@ class Terminal:
             elem_classes: CSS classes.
             allow_sudo: Whether to allow sudo commands (default: True).
             blacklist_commands: List of commands to block (default: None).
+            theme: Visual theme ('dark' or 'light', default: 'dark').
+            xterm_options: Dictionary of xterm.js options.
+            allow_unsafe_werkzeug: Allow running Werkzeug in unsafe mode (default: False).
         """
         self.port = port
         self.host = host
@@ -486,9 +568,19 @@ class Terminal:
         self.elem_classes = elem_classes
         self.allow_sudo = allow_sudo
         self.blacklist_commands = blacklist_commands or []
+        self.theme = theme
+        self.xterm_options = xterm_options or {}
+        self.allow_unsafe_werkzeug = allow_unsafe_werkzeug
 
         # Start the terminal server
-        self._server = TerminalServer(port=port, host=host, command=command)
+        self._server = TerminalServer(
+            port=port,
+            host=host,
+            command=command,
+            theme=theme,
+            xterm_options=xterm_options,
+            allow_unsafe_werkzeug=allow_unsafe_werkzeug,
+        )
         self._server.allow_sudo = allow_sudo
         self._server.blacklist_commands = self.blacklist_commands
         terminal_url = self._server.start()
@@ -532,6 +624,9 @@ def create_terminal(
     label: str | None = None,
     allow_sudo: bool = True,
     blacklist_commands: list[str] | None = None,
+    theme: str = "dark",
+    xterm_options: dict | None = None,
+    allow_unsafe_werkzeug: bool = False,
 ) -> Terminal:
     """
     Create a terminal component that can be used in Gradio Blocks.
@@ -544,6 +639,9 @@ def create_terminal(
         label: Optional label for the terminal.
         allow_sudo: Whether to allow sudo commands (default: True).
         blacklist_commands: List of commands to block (default: None).
+        theme: Visual theme ('dark' or 'light', default: 'dark').
+        xterm_options: Dictionary of xterm.js options.
+        allow_unsafe_werkzeug: Allow running Werkzeug in unsafe mode (default: False).
 
     Returns:
         A Terminal instance.
@@ -556,6 +654,9 @@ def create_terminal(
         label=label,
         allow_sudo=allow_sudo,
         blacklist_commands=blacklist_commands,
+        theme=theme,
+        xterm_options=xterm_options,
+        allow_unsafe_werkzeug=allow_unsafe_werkzeug,
     )
 
 

@@ -47,8 +47,8 @@ with demo:
 |----------|------------|-------------|
 | `launch_terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `share=False`, `allow_sudo=True`, `blacklist_commands=None`, `**launch_kwargs` | Launch a standalone Gradio app with a terminal. |
 | `create_terminal_demo()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `allow_sudo=True`, `blacklist_commands=None` | Create a Gradio Blocks demo with an embedded terminal. |
-| `Terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `label=None`, `visible=True`, `elem_id=None`, `elem_classes=None`, `allow_sudo=True`, `blacklist_commands=None` | Create a terminal component for Gradio Blocks. |
-| `TerminalServer()` | `port=5000`, `host="127.0.0.1"`, `command="bash"` | Low-level terminal server for custom integrations. |
+| `Terminal()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `height=400`, `label=None`, `visible=True`, `elem_id=None`, `elem_classes=None`, `allow_sudo=True`, `blacklist_commands=None`, `theme="dark"`, `xterm_options=None`, `allow_unsafe_werkzeug=False` | Create a terminal component for Gradio Blocks. |
+| `TerminalServer()` | `port=5000`, `host="127.0.0.1"`, `command="bash"`, `theme="dark"`, `xterm_options=None`, `allow_unsafe_werkzeug=False` | Low-level terminal server for custom integrations. |
 
 ### TerminalServer Methods
 
@@ -62,6 +62,9 @@ with demo:
 
 - `allow_sudo`: Whether to allow sudo commands (default: True). When False, sudo commands are blocked with an error message.
 - `blacklist_commands`: List of commands to block (default: None). Any command in this list will be blocked with an error message.
+- `theme`: Visual theme ('dark' or 'light', default: 'dark').
+- `xterm_options`: Optional dictionary of xterm.js options. Can be used to set `fontSize`, `fontFamily`, or override theme colors via a nested `theme` key (e.g., `{"fontSize": 16, "theme": {"background": "#FF0000"}}`). See the [official xterm.js documentation](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for a full list of available options.
+- `allow_unsafe_werkzeug`: Whether to allow running the development server in 'unsafe' mode (default: False). This is helpful when running an independent `Terminal` or `TerminalServer` instance outside of a main Gradio app. Use with caution.
 
 ## Security
 
